@@ -386,10 +386,33 @@ if(!ls_get(PROPS_KEY) && ispLoaded) syncIspToProps();
 function init(){
   const p=new URLSearchParams(window.location.search);
   const aid=p.get('id'), isAdm=p.get('admin')==='1';
+  const propParam=p.get('props'); // 担当物件IDをURLから取得
+  const nameParam=p.get('name'); // 業者名をURLから取得
   if(isAdm){
     document.getElementById('vl').style.display='flex';
-  } else if(aid && agents[aid]){
-    showAgent(aid);
+  } else if(aid){
+    // URLパラメータから業者情報を構築（localStorageに登録がなくてもOK）
+    if(agents[aid]){
+      showAgent(aid);
+    } else if(propParam){
+      // URLに物件情報が埋め込まれてる場合
+      const propKeys=propParam.split(',').filter(function(k){return props[k];});
+      curAgent={id:aid, name:decodeURIComponent(nameParam||'業者'), propKeys:propKeys};
+      document.getElementById('va').style.display='block';
+      document.getElementById('a-sub').textContent=curAgent.name;
+      buildPropSel();
+      loadCfgUI();
+      startClock();
+      if(ispLoaded) document.getElementById('isp-dl').style.display='none';
+    } else {
+      // IDはあるが情報なし→デモ
+      curAgent={id:'demo',name:'デモモード',propKeys:Object.keys(props)};
+      document.getElementById('va').style.display='block';
+      document.getElementById('a-sub').textContent='デモモード（全物件）';
+      buildPropSel();
+      loadCfgUI();
+      startClock();
+    }
   } else {
     // デモ：全物件
     curAgent={id:'demo',name:'デモモード',propKeys:Object.keys(props)};
@@ -854,7 +877,8 @@ function rAgents(){
   keys.forEach(function(k){
     const a=agents[k];
     const names=a.propKeys.filter(function(pk){return props[pk];}).map(function(pk){return props[pk].name;});
-    const url=base+'?id='+k;
+    const propIds=a.propKeys.filter(function(pk){return props[pk];}).join(',');
+    const url=base+'?id='+k+'&name='+encodeURIComponent(a.name)+'&props='+encodeURIComponent(propIds);
     const card=document.createElement('div');
     card.className='ac';
     card.innerHTML='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">'+
