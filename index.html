@@ -128,7 +128,6 @@ input.ef{border-color:#E24B4A!important;background:var(--danger-bg)!important;}
       </div>
       <div class="hdr-tabs">
         <button class="htab on" onclick="at('ai',this)"><i class="ti ti-pencil" style="font-size:13px;margin-right:3px"></i>検針入力</button>
-        <button class="htab" onclick="at('ac',this)"><i class="ti ti-settings" style="font-size:13px;margin-right:3px"></i>設定</button>
       </div>
     </div>
     <div class="scr on" id="scr-ai">
@@ -174,16 +173,21 @@ input.ef{border-color:#E24B4A!important;background:var(--danger-bg)!important;}
             </table>
           </div>
         </div>
-        <button class="bm" onclick="doSend()"><i class="ti ti-mail"></i>メールで送信</button>
+        <button class="bm" onclick="doSend()"><i class="ti ti-mail"></i>この物件を送信</button>
         <p class="note">タップするとメールアプリが開きます</p>
         <div id="isp-dl" style="display:none;margin-top:10px;">
           <button class="bm" onclick="dlIspXlsx()" style="background:var(--info-bg);color:var(--info-text);border:0.5px solid var(--info-text);">
             <i class="ti ti-file-spreadsheet"></i>ISP取込用Excelをダウンロード
           </button>
-          <p class="note">検針値入力後にExcelをダウンロードしてISPに取り込んでください</p>
         </div>
       </div>
       <div id="no-sel"><div class="emp"><i class="ti ti-building-warehouse"></i>物件を選択してください</div></div>
+      <div id="bulk-send-area" style="display:none;margin-top:10px;">
+        <button class="bm" onclick="doBulkSend()" style="background:#185FA5;color:#fff;">
+          <i class="ti ti-send"></i>送信済み全物件をまとめて送信
+        </button>
+        <p class="note">送信済みの全物件データをまとめてメールで送信します</p>
+      </div>
     </div>
     <div class="scr" id="scr-ac">
       <div class="lbl">送信先メールアドレス</div>
@@ -462,10 +466,9 @@ function startClock(){
 
 function at(n,el){
   document.querySelectorAll('#va .htab').forEach(function(t){t.classList.remove('on');});
-  ['ai','ac'].forEach(function(x){document.getElementById('scr-'+x).classList.remove('on');});
+  ['ai'].forEach(function(x){document.getElementById('scr-'+x).classList.remove('on');});
   el.classList.add('on');
   document.getElementById('scr-'+n).classList.add('on');
-  if(n==='ac') loadCfgUI();
 }
 
 function mt(n,el){
@@ -496,9 +499,12 @@ function buildPropSel(){
   const pb=document.getElementById('progress-badge');
   if(pb&&totalCount>0){
     pb.textContent=sentCount+'/'+totalCount+'件送信済み';
-    pb.style.color=sentCount===totalCount?'#3B6D11':'var(--text2)';
+    pb.style.color=sentCount>0?'#3B6D11':'var(--text2)';
     if(sentCount===totalCount&&totalCount>0) pb.textContent='✓ 全'+totalCount+'件送信済み';
   }
+  // 1件以上送信済みなら一斉送信ボタンを表示
+  const bsa=document.getElementById('bulk-send-area');
+  if(bsa) bsa.style.display=sentCount>0?'block':'none';
 }
 
 function onProp(){
@@ -614,29 +620,26 @@ function doSend(){
     wm.textContent=msg; return;
   }
   wb2.classList.remove('on');
-  const now=new Date().toLocaleString('ja-JP',{year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'});
   const today=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'}).replace(/[/]/g,'/');
   const lines=p.rooms.map(function(r){
     const v=parseInt(document.getElementById('ci-'+r).value);
     const pd=p.prev[r]; const u=pd?calcUsage(pd.v,v):'—'; const lp=pd&&v<pd.v;
     return r+'号室　前回:'+(pd?pd.v:'—')+'㎥ → 今回:'+v+'㎥　使用量:'+u+'㎥'+(lp?' ※1周':'');
   }).join('\n');
-  const subj=cfg.subject||'●年●月分　水道検針データ';
+  const subj=cfg.subject||'水道検針データ';
   const bodyPrefix=cfg.bodyTemplate?cfg.bodyTemplate+'\n\n':'';
-  const body=bodyPrefix+'【水道検針報告】\n\n物件名：'+p.name+'\n検針日：'+kensindate+'\n検針日時：'+now+'\n担当者：'+worker+'（'+company+'）\n\n■ 検針結果\n'+lines+'\n\n---\n水道検針アプリより送信';
+  const body=bodyPrefix+'物件名：'+p.name+'\n検針日：'+kensindate+'\n担当者：'+worker+'（'+company+'）\n\n■ 検針結果\n'+lines+'\n\n---\n水道検針アプリより送信';
 
   // 送信済みデータをlocalStorageに保存
-  const sentKey='sent_'+k;
   const sentData={
-    propName:p.name, sentAt:now, sentDate:kensindate||today,
-    worker:worker, company:company,
-    rooms:{}
+    propName:p.name, sentAt:today, sentDate:kensindate||today,
+    worker:worker, company:company, rooms:{}
   };
   p.rooms.forEach(function(r){
     const v=parseInt(document.getElementById('ci-'+r).value);
     sentData.rooms[r]=v;
   });
-  ls_set(sentKey, sentData);
+  ls_set('sent_'+k, sentData);
 
   // ISPデータにも今回値を反映
   const bld=getIspBld(p.name);
@@ -644,16 +647,20 @@ function doSend(){
     bld.rooms.forEach(function(rm){
       if(sentData.rooms[rm.room]!==undefined){
         rm.curr_val=sentData.rooms[rm.room];
-        rm.kensin_date=today;
+        rm.kensin_date=kensindate||today;
       }
     });
     saveIsp();
   }
 
-  // 物件選択リストを更新（送信済みマーク）
   buildPropSel();
 
-  window.location.href='mailto:'+encodeURIComponent(cfg.email||'')+(cfg.cc?'&cc='+encodeURIComponent(cfg.cc):'')+'?subject='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
+  // メール送信（TOを確実に設定）
+  const toEmail=cfg.email||'';
+  const ccEmail=cfg.cc||'';
+  let mailUrl='mailto:'+encodeURIComponent(toEmail)+'?subject='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
+  if(ccEmail) mailUrl+='&cc='+encodeURIComponent(ccEmail);
+  window.location.href=mailUrl;
 }
 
 function loadCfgUI(){document.getElementById('c-email').value=cfg.email;document.getElementById('c-cc').value=cfg.cc;}
@@ -1033,6 +1040,44 @@ function saveAdmCfg(){
   cfg.subject=document.getElementById('m-subject').value.trim();
   cfg.bodyTemplate=document.getElementById('m-body').value.trim();
   saveCfgStore(); toast('保存しました');
+}
+
+function doBulkSend(){
+  const worker=document.getElementById('i-worker').value.trim();
+  const company=document.getElementById('i-company').value.trim();
+  if(!worker||!company){
+    toast('担当者名と会社名を入力してください');
+    if(!worker){document.getElementById('i-worker').classList.add('ef');document.getElementById('w-worker').classList.add('on');}
+    if(!company){document.getElementById('i-company').classList.add('ef');document.getElementById('w-company').classList.add('on');}
+    return;
+  }
+  const keys=curAgent?curAgent.propKeys:Object.keys(props);
+  const sentKeys=keys.filter(function(k){return ls_get('sent_'+k);});
+  if(!sentKeys.length){toast('送信済みの物件がありません');return;}
+
+  let allLines='';
+  sentKeys.forEach(function(k){
+    const sent=ls_get('sent_'+k);
+    if(!sent||!props[k]) return;
+    const p=props[k];
+    allLines+='\n【'+p.name+'】検針日：'+sent.sentDate+'\n';
+    p.rooms.forEach(function(r){
+      const v=sent.rooms[r];
+      const pd=p.prev[r];
+      const u=pd&&v!==undefined?calcUsage(pd.v,v):'—';
+      const lp=pd&&v<pd.v;
+      allLines+=r+'号室　前回:'+(pd?pd.v:'—')+'㎥ → 今回:'+(v!==undefined?v:'—')+'㎥　使用量:'+u+'㎥'+(lp?' ※1周':'')+' \n';
+    });
+  });
+
+  const subj=cfg.subject||'水道検針データ';
+  const bodyPrefix=cfg.bodyTemplate?cfg.bodyTemplate+'\n\n':'';
+  const body=bodyPrefix+'担当者：'+worker+'（'+company+'）\n\n■ 検針結果（'+sentKeys.length+'物件）'+allLines+'\n---\n水道検針アプリより送信';
+  const toEmail=cfg.email||'';
+  const ccEmail=cfg.cc||'';
+  let mailUrl='mailto:'+encodeURIComponent(toEmail)+'?subject='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
+  if(ccEmail) mailUrl+='&cc='+encodeURIComponent(ccEmail);
+  window.location.href=mailUrl;
 }
 
 function resetSentData(){
