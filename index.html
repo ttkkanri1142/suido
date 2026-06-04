@@ -189,7 +189,7 @@ input.ef{border-color:#E24B4A!important;background:var(--danger-bg)!important;}
         </div>
       </div>
       <div id="no-sel"><div class="emp"><i class="ti ti-building-warehouse"></i>物件を選択してください</div></div>
-      <div id="bulk-send-area" style="display:none;margin-top:10px;">
+      <div id="bulk-send-area" style="margin-top:10px;">
         <button class="bm" onclick="doBulkSend()" style="background:#185FA5;color:#fff;">
           <i class="ti ti-send"></i>送信済み全物件をまとめて送信
         </button>
@@ -539,9 +539,7 @@ function buildPropSel(){
     pb.style.color=sentCount>0?'#3B6D11':'var(--text2)';
     if(sentCount===totalCount&&totalCount>0) pb.textContent='✓ 全'+totalCount+'件送信済み';
   }
-  // 1件以上送信済みなら一斉送信ボタンを表示
-  const bsa=document.getElementById('bulk-send-area');
-  if(bsa) bsa.style.display=sentCount>0?'block':'none';
+  // 一斉送信ボタンは常時表示
 }
 
 function onProp(){
@@ -571,8 +569,8 @@ function onProp(){
   // メールアドレス表示
   const emailArea=document.getElementById('email-copy-area');
   const emailDisp=document.getElementById('email-display');
-  if(emailArea&&emailDisp&&cfg.email){
-    emailDisp.textContent=cfg.email;
+  if(emailArea&&emailDisp){
+    emailDisp.textContent=cfg.email||'（未設定）';
     emailArea.style.display='block';
   }
 }
@@ -954,10 +952,10 @@ function rAgents(){
     const a=agents[k];
     const names=a.propKeys.filter(function(pk){return props[pk];}).map(function(pk){return props[pk].name;});
     const propIds=a.propKeys.filter(function(pk){return props[pk];}).join(',');
-    const emailParam=cfg.email?'&email='+encodeURIComponent(cfg.email):'';
+    const emailParam='&email='+encodeURIComponent(cfg.email||'');
     const ccParam=cfg.cc?'&cc='+encodeURIComponent(cfg.cc):'';
-    const subjParam=cfg.subject?'&subj='+encodeURIComponent(cfg.subject):'';
-    const bodyParam=cfg.bodyTemplate?'&body='+encodeURIComponent(cfg.bodyTemplate):'';
+    const subjParam='&subj='+encodeURIComponent(cfg.subject||'●年●月分　水道検針データ');
+    const bodyParam='&body='+encodeURIComponent(cfg.bodyTemplate||'水道検針データを送付しますので、確認お願いいたします。');
     const url=base+'?id='+k+'&name='+encodeURIComponent(a.name)+'&props='+encodeURIComponent(propIds)+emailParam+ccParam+subjParam+bodyParam;
     const card=document.createElement('div');
     card.className='ac';
