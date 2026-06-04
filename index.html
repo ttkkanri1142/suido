@@ -1061,27 +1061,62 @@ function doBulkSend(){
     return;
   }
   const keys=curAgent?curAgent.propKeys:Object.keys(props);
-  const sentKeys=keys.filter(function(k){return ls_get('sent_'+k);});
-  if(!sentKeys.length){toast('送信済みの物件がありません');return;}
+
+  // 送信済み＋現在入力中の物件を全部収集
+  var allData={};
+
+  // 送信済みデータを収集
+  keys.forEach(function(k){
+    const sent=ls_get('sent_'+k);
+    if(sent) allData[k]=sent;
+  });
+
+  // 現在入力中の物件データを収集（sentがなくても入力があれば含める）
+  keys.forEach(function(k){
+    if(allData[k]) return; // すでに送信済みデータあり
+    const p=props[k];
+    if(!p) return;
+    const kensindate=document.getElementById('i-kensindate')?document.getElementById('i-kensindate').value:'';
+    const rooms={};
+    var hasInput=false;
+    p.rooms.forEach(function(r){
+      const status=(p.roomStatus&&p.roomStatus[r])||'normal';
+      if(status==='exclude') return;
+      const inp=document.getElementById('ci-'+r);
+      if(inp&&inp.value){
+        const v=parseInt(inp.value);
+        if(!isNaN(v)){rooms[r]=v; hasInput=true;}
+      }
+    });
+    if(hasInput){
+      const today=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'}).replace(/[/]/g,'/');
+      allData[k]={propName:p.name, sentDate:kensindate||today, worker:worker, company:company, rooms:rooms};
+    }
+  });
+
+  const dataKeys=Object.keys(allData);
+  if(!dataKeys.length){toast('1物件以上入力してから送信してください');return;}
 
   let allLines='';
-  sentKeys.forEach(function(k){
-    const sent=ls_get('sent_'+k);
-    if(!sent||!props[k]) return;
+  dataKeys.forEach(function(k){
+    const d=allData[k];
     const p=props[k];
-    allLines+='\n【'+p.name+'】検針日：'+sent.sentDate+'\n';
+    if(!p) return;
+    allLines+='\n【'+p.name+'】検針日：'+d.sentDate+'\n';
     p.rooms.forEach(function(r){
-      const v=sent.rooms[r];
+      const status=(p.roomStatus&&p.roomStatus[r])||'normal';
+      if(status==='exclude') return;
+      const v=d.rooms[r];
+      if(v===undefined) return;
       const pd=p.prev[r];
-      const u=pd&&v!==undefined?calcUsage(pd.v,v):'—';
-      const lp=pd&&v<pd.v;
-      allLines+=r+'号室　前回:'+(pd?pd.v:'—')+'㎥ → 今回:'+(v!==undefined?v:'—')+'㎥　使用量:'+u+'㎥'+(lp?' ※1周':'')+' \n';
+      const u=pd&&v!==undefined?(v-pd.v):'—';
+      allLines+=r+'号室　前回:'+(pd?pd.v:'—')+'㎥ → 今回:'+v+'㎥　使用量:'+u+'㎥\n';
     });
   });
 
   const subj=cfg.subject||'水道検針データ';
   const bodyPrefix=cfg.bodyTemplate?cfg.bodyTemplate+'\n\n':'';
-  const body=bodyPrefix+'担当者：'+worker+'（'+company+'）\n\n■ 検針結果（'+sentKeys.length+'物件）'+allLines+'\n---\n水道検針アプリより送信';
+  const body=bodyPrefix+'担当者：'+worker+'（'+company+'）\n\n■ 検針結果（'+dataKeys.length+'物件）'+allLines+'\n---\n水道検針アプリより送信';
   const toEmail=cfg.email||'';
   const ccEmail=cfg.cc||'';
   let mailUrl='mailto:'+encodeURIComponent(toEmail)+'?subject='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
