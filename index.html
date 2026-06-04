@@ -175,6 +175,13 @@ input.ef{border-color:#E24B4A!important;background:var(--danger-bg)!important;}
         </div>
         <button class="bm" onclick="doSend()"><i class="ti ti-mail"></i>この物件を送信</button>
         <p class="note">タップするとメールアプリが開きます</p>
+        <div id="email-copy-area" style="display:none;margin-top:12px;background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--radius);padding:12px 14px;">
+          <p style="font-size:12px;color:var(--text2);margin-bottom:8px;">メールアプリで宛先が自動入力されない場合は、以下のアドレスに送信してください。</p>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span id="email-display" style="font-size:14px;font-weight:500;color:var(--text);flex:1;word-break:break-all;"></span>
+            <button onclick="copyEmail()" style="height:36px;padding:0 12px;font-size:13px;background:var(--text);color:var(--bg);border:none;border-radius:var(--radius);cursor:pointer;flex-shrink:0;">コピー</button>
+          </div>
+        </div>
         <div id="isp-dl" style="display:none;margin-top:10px;">
           <button class="bm" onclick="dlIspXlsx()" style="background:var(--info-bg);color:var(--info-text);border:0.5px solid var(--info-text);">
             <i class="ti ti-file-spreadsheet"></i>ISP取込用Excelをダウンロード
@@ -537,6 +544,13 @@ function onProp(){
   // ISPダウンロードボタン表示
   const ispBld=getIspBld(props[k].name);
   document.getElementById('isp-dl').style.display=(ispBld?'block':'none');
+  // メールアドレス表示
+  const emailArea=document.getElementById('email-copy-area');
+  const emailDisp=document.getElementById('email-display');
+  if(emailArea&&emailDisp&&cfg.email){
+    emailDisp.textContent=cfg.email;
+    emailArea.style.display='block';
+  }
 }
 
 function buildRoomTable(k){
@@ -1114,6 +1128,18 @@ function resetSentData(){
   }
   buildPropSel();
   toast('送信済みデータをリセットしました');
+}
+
+function copyEmail(){
+  const email=cfg.email||'';
+  if(!email){toast('送信先メールアドレスが設定されていません');return;}
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(email).then(function(){
+      toast('メールアドレスをコピーしました');
+    });
+  } else {
+    toast(email);
+  }
 }
 
 function toast(msg){
