@@ -173,9 +173,7 @@ input.ef{border-color:#E24B4A!important;background:var(--danger-bg)!important;}
             </table>
           </div>
         </div>
-        <button class="bm" onclick="doSend()"><i class="ti ti-mail"></i>この物件を送信</button>
-        <p class="note">タップするとメールアプリが開きます</p>
-        <div id="email-copy-area" style="display:none;margin-top:12px;background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--radius);padding:12px 14px;">
+        <div id="email-copy-area" style="margin-bottom:10px;background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--radius);padding:12px 14px;">
           <p style="font-size:12px;color:var(--text2);margin-bottom:8px;">メールアプリで宛先が自動入力されない場合は、以下のアドレスに送信してください。</p>
           <div style="display:flex;align-items:center;gap:8px;">
             <span id="email-display" style="font-size:14px;font-weight:500;color:var(--text);flex:1;word-break:break-all;"></span>
@@ -567,12 +565,8 @@ function onProp(){
   const ispBld=getIspBld(props[k].name);
   document.getElementById('isp-dl').style.display=(ispBld?'block':'none');
   // メールアドレス表示
-  const emailArea=document.getElementById('email-copy-area');
   const emailDisp=document.getElementById('email-display');
-  if(emailArea&&emailDisp){
-    emailDisp.textContent=cfg.email||'（未設定）';
-    emailArea.style.display='block';
-  }
+  if(emailDisp) emailDisp.textContent=cfg.email||'（未設定）';
 }
 
 function buildRoomTable(k){
@@ -649,86 +643,7 @@ function onCI(k,r){
   }
 }
 
-function doSend(){
-  const worker=document.getElementById('i-worker').value.trim();
-  const company=document.getElementById('i-company').value.trim();
-  const k=document.getElementById('s-prop').value;
-  const kensindate=document.getElementById('i-kensindate').value;
-  let hasErr=false;
-  if(!worker){document.getElementById('i-worker').classList.add('ef');document.getElementById('w-worker').classList.add('on');hasErr=true;}
-  if(!company){document.getElementById('i-company').classList.add('ef');document.getElementById('w-company').classList.add('on');hasErr=true;}
-  if(!k){document.getElementById('s-prop').classList.add('ef');document.getElementById('w-prop').classList.add('on');hasErr=true;}
-  if(!kensindate){document.getElementById('i-kensindate').classList.add('ef');document.getElementById('w-kensindate').classList.add('on');hasErr=true;}
-  if(hasErr||!k) return;
-  const p=props[k];
-  let emR=[],errR=[];
-  p.rooms.forEach(function(r){
-    const status=(p.roomStatus&&p.roomStatus[r])||'normal';
-    if(status==='exclude') return; // 対象外はスキップ
-    const v=(document.getElementById('ci-'+r)||{}).value||'';
-    const curr=parseInt(v);
-    const pd=p.prev[r];
-    if(!v&&status==='normal') emR.push(r+'号室');
-    // 任意は未入力でもスキップ
-    else if(v&&(isNaN(curr)||curr<0||curr>METER_MAX)) errR.push(r+'号室（値異常）');
-    else if(v&&pd&&curr<pd.v) errR.push(r+'号室（前回値より低い）');
-    else if(v&&pd&&(curr-pd.v)>5000) errR.push(r+'号室（使用量5000㎥超）');
-  });
-  const wb2=document.getElementById('wb-val'),wm=document.getElementById('wb-msg');
-  if(emR.length||errR.length){
-    wb2.classList.add('on');
-    let msg='';
-    if(emR.length) msg+='未入力：'+emR.join('、')+'。';
-    if(errR.length) msg+=' エラー：'+errR.join('、')+'。';
-    wm.textContent=msg; return;
-  }
-  wb2.classList.remove('on');
-  const today=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'}).replace(/[/]/g,'/');
-  const lines=p.rooms.map(function(r){
-    const v=parseInt(document.getElementById('ci-'+r).value);
-    const pd=p.prev[r]; const u=pd?calcUsage(pd.v,v):'—'; const lp=pd&&v<pd.v;
-    return r+'号室　前回:'+(pd?pd.v:'—')+'㎥ → 今回:'+v+'㎥　使用量:'+u+'㎥'+(lp?' ※1周':'');
-  }).join('\n');
-  const subj=cfg.subject||'水道検針データ';
-  const bodyPrefix=cfg.bodyTemplate?cfg.bodyTemplate+'\n\n':'';
-  const body=bodyPrefix+'物件名：'+p.name+'\n検針日：'+kensindate+'\n担当者：'+worker+'（'+company+'）\n\n■ 検針結果\n'+lines+'\n\n---\n水道検針アプリより送信';
-
-  // 送信済みデータをlocalStorageに保存
-  const sentData={
-    propName:p.name, sentAt:today, sentDate:kensindate||today,
-    worker:worker, company:company, rooms:{}
-  };
-  p.rooms.forEach(function(r){
-    const status=(p.roomStatus&&p.roomStatus[r])||'normal';
-    if(status==='exclude') return;
-    const el=document.getElementById('ci-'+r);
-    if(!el||!el.value) return;
-    const v=parseInt(el.value);
-    if(!isNaN(v)) sentData.rooms[r]=v;
-  });
-  ls_set('sent_'+k, sentData);
-
-  // ISPデータにも今回値を反映
-  const bld=getIspBld(p.name);
-  if(bld){
-    bld.rooms.forEach(function(rm){
-      if(sentData.rooms[rm.room]!==undefined){
-        rm.curr_val=sentData.rooms[rm.room];
-        rm.kensin_date=kensindate||today;
-      }
-    });
-    saveIsp();
-  }
-
-  buildPropSel();
-
-  // メール送信（TOを確実に設定）
-  const toEmail=cfg.email||'';
-  const ccEmail=cfg.cc||'';
-  let mailUrl='mailto:'+encodeURIComponent(toEmail)+'?subject='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
-  if(ccEmail) mailUrl+='&cc='+encodeURIComponent(ccEmail);
-  window.location.href=mailUrl;
-}
+function doSend(){}
 
 function loadCfgUI(){document.getElementById('c-email').value=cfg.email;document.getElementById('c-cc').value=cfg.cc;}
 function saveCfg(){cfg.email=document.getElementById('c-email').value.trim();cfg.cc=document.getElementById('c-cc').value.trim();saveCfgStore();toast('設定を保存しました');}
@@ -1010,6 +925,14 @@ function buildPChk(sel){
   const el=document.getElementById('p-chk');
   const keys=Object.keys(props);
   if(!keys.length){el.innerHTML='<p style="font-size:13px;color:var(--text2);padding:8px;">先に物件を登録してください</p>';return;}
+  // 他業者に割り当て済みの物件を取得
+  const assignedElsewhere={};
+  Object.keys(agents).forEach(function(ak){
+    if(ak===editAgKey) return; // 編集中の業者はスキップ
+    (agents[ak].propKeys||[]).forEach(function(pk){
+      assignedElsewhere[pk]=agents[ak].name;
+    });
+  });
   const frag=document.createDocumentFragment();
   keys.forEach(function(k){
     const lbl=document.createElement('label');
@@ -1018,7 +941,15 @@ function buildPChk(sel){
     cb.type='checkbox'; cb.value=k;
     if(sel&&sel.includes(k)) cb.checked=true;
     const sp=document.createElement('span');
-    sp.textContent=props[k].name+'（'+props[k].units+'戸）';
+    if(assignedElsewhere[k]&&!(sel&&sel.includes(k))){
+      // 他業者に割り当て済みで自分が選んでない場合はグレーアウト
+      sp.textContent=props[k].name+'（'+props[k].units+'戸）　※'+assignedElsewhere[k]+'が担当';
+      sp.style.color='var(--text3)';
+      cb.disabled=true;
+      lbl.style.opacity='0.5';
+    } else {
+      sp.textContent=props[k].name+'（'+props[k].units+'戸）';
+    }
     lbl.appendChild(cb); lbl.appendChild(sp);
     frag.appendChild(lbl);
   });
