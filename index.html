@@ -157,7 +157,7 @@ input.ef{border-color:#E24B4A!important;background:var(--danger-bg)!important;}
         <span class="wi" id="w-prop" style="margin-top:4px;">物件を選択してください</span>
       </div>
       <div id="rm-sec" style="display:none;">
-        <div class="dtb"><i class="ti ti-clock"></i><span id="dtn"></span></div>
+
         <div class="card" style="margin-bottom:10px;">
           <div class="sec-title"><i class="ti ti-calendar" style="font-size:15px"></i>検針日 <span class="req">*</span></div>
           <input type="date" id="i-kensindate" style="width:100%;height:44px;padding:0 12px;font-size:15px;background:var(--bg2);border:0.5px solid var(--border2);border-radius:var(--radius);color:var(--text);outline:none;">
@@ -390,8 +390,17 @@ if(!ls_get(PROPS_KEY) && ispLoaded) syncIspToProps();
 function init(){
   const p=new URLSearchParams(window.location.search);
   const aid=p.get('id'), isAdm=p.get('admin')==='1';
-  const propParam=p.get('props'); // 担当物件IDをURLから取得
-  const nameParam=p.get('name'); // 業者名をURLから取得
+  const propParam=p.get('props');
+  const nameParam=p.get('name');
+  const emailParam=p.get('email');
+  const ccParam=p.get('cc');
+  const subjParam=p.get('subj');
+  const bodyParam=p.get('body');
+  // URLパラメータからcfgを上書き（業者画面用）
+  if(emailParam) cfg.email=decodeURIComponent(emailParam);
+  if(ccParam) cfg.cc=decodeURIComponent(ccParam);
+  if(subjParam) cfg.subject=decodeURIComponent(subjParam);
+  if(bodyParam) cfg.bodyTemplate=decodeURIComponent(bodyParam);
   if(isAdm){
     document.getElementById('vl').style.display='flex';
   } else if(aid){
@@ -459,10 +468,7 @@ function aLogout(){
   document.getElementById('w-apw').classList.remove('on');
 }
 
-function startClock(){
-  function tick(){const e=document.getElementById('dtn');if(e)e.textContent=new Date().toLocaleString('ja-JP',{year:'numeric',month:'long',day:'numeric',weekday:'short',hour:'2-digit',minute:'2-digit'});}
-  setInterval(tick,1000);tick();
-}
+function startClock(){}
 
 function at(n,el){
   document.querySelectorAll('#va .htab').forEach(function(t){t.classList.remove('on');});
@@ -540,7 +546,7 @@ function buildRoomTable(k){
     const pd=p.prev[r];
     const sentVal=sent&&sent.rooms[r]!==undefined?sent.rooms[r]:null;
     const isSent=sentVal!==null;
-    const usage=isSent&&pd?calcUsage(pd.v,sentVal)+'㎥'+(sentVal<pd.v?' (1周)':''):'—';
+    const usage=isSent&&pd?(sentVal-pd.v)+'㎥':'—';
     return '<tr style="'+(isSent?'background:rgba(59,109,17,0.05);':'')+'">'+
       '<td class="rn">'+r+'号室</td>'+
       '<td class="pv">'+(pd?pd.v:'—')+'</td>' +
@@ -581,14 +587,22 @@ function onCI(k,r){
   const uc=document.getElementById('uc-'+r);
   const v=inp.value; const curr=parseInt(v);
   if(!v){inp.classList.remove('err');uc.textContent='—';uc.className='uc';uc.style.color='';return;}
-  if(isNaN(curr)||curr<0||curr>METER_MAX){inp.classList.add('err');uc.textContent='値異常';uc.className='uc';uc.style.color='#A32D2D';return;}
+  if(isNaN(curr)||curr<0||curr>METER_MAX){
+    inp.classList.add('err');uc.textContent='値異常';uc.className='uc';uc.style.color='#A32D2D';return;
+  }
+  // 前回値より低い場合はエラー
+  if(pd&&curr<pd.v){
+    inp.classList.add('err');uc.textContent='前回値より低い';uc.className='uc';uc.style.color='#A32D2D';return;
+  }
   inp.classList.remove('err');uc.style.color='';
   if(pd&&!isNaN(curr)){
-    const u=calcUsage(pd.v,curr);
-    const lp=curr<pd.v;
-    uc.textContent=u+'㎥'+(lp?' (1周)':'');
+    const u=curr-pd.v;
+    // 使用量5000超はエラー
+    if(u>5000){
+      inp.classList.add('err');uc.textContent=u+'㎥ 異常';uc.className='uc';uc.style.color='#A32D2D';return;
+    }
+    uc.textContent=u+'㎥';
     uc.className='uc ok';
-    if(lp) uc.style.color='var(--info-text)';
   }
 }
 
@@ -608,8 +622,11 @@ function doSend(){
   p.rooms.forEach(function(r){
     const v=(document.getElementById('ci-'+r)||{}).value||'';
     const curr=parseInt(v);
+    const pd=p.prev[r];
     if(!v) emR.push(r+'号室');
     else if(isNaN(curr)||curr<0||curr>METER_MAX) errR.push(r+'号室（値異常）');
+    else if(pd&&curr<pd.v) errR.push(r+'号室（前回値より低い）');
+    else if(pd&&(curr-pd.v)>5000) errR.push(r+'号室（使用量5000㎥超）');
   });
   const wb2=document.getElementById('wb-val'),wm=document.getElementById('wb-msg');
   if(emR.length||errR.length){
@@ -885,7 +902,11 @@ function rAgents(){
     const a=agents[k];
     const names=a.propKeys.filter(function(pk){return props[pk];}).map(function(pk){return props[pk].name;});
     const propIds=a.propKeys.filter(function(pk){return props[pk];}).join(',');
-    const url=base+'?id='+k+'&name='+encodeURIComponent(a.name)+'&props='+encodeURIComponent(propIds);
+    const emailParam=cfg.email?'&email='+encodeURIComponent(cfg.email):'';
+    const ccParam=cfg.cc?'&cc='+encodeURIComponent(cfg.cc):'';
+    const subjParam=cfg.subject?'&subj='+encodeURIComponent(cfg.subject):'';
+    const bodyParam=cfg.bodyTemplate?'&body='+encodeURIComponent(cfg.bodyTemplate):'';
+    const url=base+'?id='+k+'&name='+encodeURIComponent(a.name)+'&props='+encodeURIComponent(propIds)+emailParam+ccParam+subjParam+bodyParam;
     const card=document.createElement('div');
     card.className='ac';
     card.innerHTML='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">'+
