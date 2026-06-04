@@ -389,13 +389,19 @@ function saveIsp(){ls_set(ISP_KEY,ispData);}
 // ISPデータが初期状態のとき、propsに同期
 function syncIspToProps(){
   if(!ispData||!ispData.buildings) return;
+  const presetStatus={"アビニヨンビル": {"101": "optional", "102": "optional", "104": "exclude", "106": "exclude"}, "大栄コーポ": {"102": "exclude", "103": "exclude"}};
   ispData.buildings.forEach(function(bld){
     if(!bld.rooms||!bld.rooms.length) return;
     const key='isp_'+bld.id;
+    const roomStatus={};
+    if(presetStatus[bld.name]){
+      Object.assign(roomStatus, presetStatus[bld.name]);
+    }
     props[key]={
       name:bld.name, units:bld.rooms.length,
       rooms:bld.rooms.map(function(r){return r.room;}),
-      prev:{}, ispKey:bld.id
+      prev:{}, ispKey:bld.id,
+      roomStatus:roomStatus
     };
     bld.rooms.forEach(function(r){
       props[key].prev[r.room]={v:r.prev_val||0, d:r.prev_date||'未検針'};
