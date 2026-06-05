@@ -1061,41 +1061,47 @@ function doBulkSend(){
     return;
   }
   const keys=curAgent?curAgent.propKeys:Object.keys(props);
+  const kensindate=document.getElementById('i-kensindate')?document.getElementById('i-kensindate').value:'';
+  const today=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'}).replace(/[/]/g,'/');
 
-  // 送信済み＋現在入力中の物件を全部収集
+  // 全データ収集：送信済み＋現在入力中
   var allData={};
 
-  // 送信済みデータを収集
+  // まず送信済みデータを収集
   keys.forEach(function(k){
     const sent=ls_get('sent_'+k);
     if(sent) allData[k]=sent;
   });
 
-  // 現在入力中の物件データを収集（sentがなくても入力があれば含める）
+  // 次に現在入力中の物件のデータを収集（どの物件でも）
   keys.forEach(function(k){
-    if(allData[k]) return; // すでに送信済みデータあり
     const p=props[k];
     if(!p) return;
-    const kensindate=document.getElementById('i-kensindate')?document.getElementById('i-kensindate').value:'';
     const rooms={};
     var hasInput=false;
     p.rooms.forEach(function(r){
       const status=(p.roomStatus&&p.roomStatus[r])||'normal';
       if(status==='exclude') return;
       const inp=document.getElementById('ci-'+r);
-      if(inp&&inp.value){
-        const v=parseInt(inp.value);
-        if(!isNaN(v)){rooms[r]=v; hasInput=true;}
+      if(inp&&inp.value&&!isNaN(parseInt(inp.value))){
+        rooms[r]=parseInt(inp.value);
+        hasInput=true;
       }
     });
     if(hasInput){
-      const today=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'}).replace(/[/]/g,'/');
-      allData[k]={propName:p.name, sentDate:kensindate||today, worker:worker, company:company, rooms:rooms};
+      // 入力済みデータで上書き（送信済みより優先）
+      allData[k]={
+        propName:p.name,
+        sentDate:kensindate||today,
+        worker:worker,
+        company:company,
+        rooms:rooms
+      };
     }
   });
 
   const dataKeys=Object.keys(allData);
-  if(!dataKeys.length){toast('1物件以上入力してから送信してください');return;}
+  if(!dataKeys.length){toast('検針値を入力してから送信してください');return;}
 
   let allLines='';
   dataKeys.forEach(function(k){
@@ -1109,7 +1115,7 @@ function doBulkSend(){
       const v=d.rooms[r];
       if(v===undefined) return;
       const pd=p.prev[r];
-      const u=pd&&v!==undefined?(v-pd.v):'—';
+      const u=(pd&&v!==undefined)?(v-pd.v):'—';
       allLines+=r+'号室　前回:'+(pd?pd.v:'—')+'㎥ → 今回:'+v+'㎥　使用量:'+u+'㎥\n';
     });
   });
