@@ -811,6 +811,10 @@ function dlAgentXlsx(agentKey){
 }
 
 function buildXlsx(buildings,label,kensinDate){
+  // YYYY-MM-DD → YYYY/MM/DD に変換
+  if(kensinDate&&kensinDate.indexOf('-')>-1){
+    kensinDate=kensinDate.replace(/-/g,'/');
+  }
   const aoa=[];
   // 元のISP Excelに合わせてB列(index1)から始める
   // 各行は47要素（0-46）でA列は空
