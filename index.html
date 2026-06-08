@@ -878,7 +878,7 @@ function buildXlsx(buildings,label,kensinDate){
   const ws=XLSX.utils.aoa_to_sheet(aoa);
   XLSX.utils.book_append_sheet(wb,ws,'水道検針(検針月別)【入力】');
   const mn=(ispData.kensin_month||'').replace('年','').replace('月度','');
-  XLSX.writeFile(wb,'水道検針取込_'+label+'_'+mn+'.xlsx');
+  XLSX.writeFile(wb,'水道検針取込_'+label+'_'+mn+'.xls', {bookType:'xls'});
   toast('Excelをダウンロードしました');
 }
 
